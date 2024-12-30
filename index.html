@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorer Blazzy CRO</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.0/dist/ethers.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        body {
+            font-family: 'Press Start 2P', sans-serif;
+            background: linear-gradient(90deg, #0d0d0d, #1a1a1a);
+            color: #00ff00;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: start;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .top-bar {
+            width: 100%;
+            background: linear-gradient(to right, #ffcc00, #ff9900);
+            padding: 10px 0;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            font-size: 1.2rem;
+            color: #1a1a1a;
+            font-weight: bold;
+            text-shadow: 0 0 3px #ffffff, 0 0 10px #000000;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #00ff00;
+            margin-top: 20px;
+            text-shadow: 0 0 10px #00ff00, 0 0 20px #33ff33, 0 0 30px #66ff66;
+        }
+        h3 {
+            font-size: 1rem;
+            color: #ffcc00;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ffaa00;
+        }
+        .transaction-list {
+            width: 90%;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(10, 10, 10, 0.9);
+            box-shadow: 0 0 25px rgba(0, 255, 0, 0.5);
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        .transaction {
+            background: rgba(0, 255, 0, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+            border: 1px solid #00ff00;
+            text-align: left;
+        }
+        .transaction:hover {
+            background: rgba(0, 255, 0, 0.2);
+            transform: scale(1.02);
+        }
+        .transaction p {
+            font-size: 1rem;
+            margin: 5px 0;
+            color: #e0e0e0;
+        }
+        .transaction .hash {
+            color: #66ccff;
+            word-wrap: break-word;
+        }
+        .loading {
+            color: #ff6666;
+            font-size: 1.5rem;
+            font-style: italic;
+        }
+        .error {
+            color: #ff3333;
+            font-size: 1.2rem;
+            font-style: italic;
+        }
+        footer {
+            margin-top: 20px;
+            color: #888888;
+            font-size: 0.8rem;
+            text-shadow: 0 0 2px #000000;
+        }
+        .transaction-list::-webkit-scrollbar {
+            width: 10px;
+        }
+        .transaction-list::-webkit-scrollbar-thumb {
+            background: #00ff00;
+            border-radius: 5px;
+        }
+        .transaction-list::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            .top-bar {
+                font-size: 1rem;
+                padding: 8px 0;
+            }
+            .transaction-list {
+                width: 100%;
+                padding: 8px;
+            }
+            .transaction p {
+                font-size: 0.9rem;
+            }
+            footer {
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">Explorer Blazzy CRO</div>
+
+    <h1>Cronos Blockchain Explorer</h1>
+
+    <div class="content">
+        <h3>Transactions for Contract Address</h3>
+        <div id="contractTxs" class="transaction-list loading">Loading...</div>
+
+        <h3>Transactions for Liquidity Pool</h3>
+        <div id="liquidityPoolTxs" class="transaction-list loading">Loading...</div>
+
+        <h3>Token Transfers for Liquidity Pool</h3>
+        <div id="liquidityPoolTokenTransfers" class="transaction-list loading">Loading...</div>
+    </div>
+
+    <footer>Powered by Blazzy CRO</footer>
+
+    <script>
+        const contractAddress = "0x9Ef3fc220867F6cF5655Db3d950cDA67A3a92F9f";
+        const liquidityPoolAddress = "0x5f028f49a7443f34aedfc19ed986c92243d98ef5";
+        const cronoscanApiKey = "726ZMHCDMC3CFGQHDR7NRGMS6C6R51PEHQ"; // Replace with your valid Cronoscan API key
+
+        // Fetch all normal and internal transactions with pagination
+        async function fetchTransactions(address, type = "txlist") {
+            let allTransactions = [];
+            let startBlock = 0;
+            const pageSize = 100;  // Number of transactions per API call
+            let hasMore = true;
+
+            while (hasMore) {
+                const url = `https://api.cronoscan.com/api?module=account&action=${type}&address=${address}&startblock=${startBlock}&endblock=99999999&page=1&offset=${pageSize}&sort=desc&apikey=${cronoscanApiKey}`;
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    if (data.status === "1" && data.result) {
+                        allTransactions = allTransactions.concat(data.result);
+                        // Check if there are more transactions to fetch
+                        if (data.result.length < pageSize) {
+                            hasMore = false;
+                        } else {
+                            startBlock = data.result[data.result.length - 1].blockNumber + 1;  // Update startBlock to the next block after the last transaction
+                        }
+                    } else {
+                        throw new Error(data.message || "No transactions found.");
+                    }
+                } catch (error) {
+                    console.error(`Error fetching ${type}:`, error);
+                    break;
+                }
+            }
+            return allTransactions;
+        }
+
+        // Fetch all token transfers
+        async function fetchTokenTransfers(address) {
+            let allTransfers = [];
+            let startBlock = 0;
+            const pageSize = 100;
+            let hasMore = true;
+
+            while (hasMore) {
+                const url = `https://api.cronoscan.com/api?module=account&action=tokentx&address=${address}&startblock=${startBlock}&endblock=99999999&page=1&offset=${pageSize}&sort=desc&apikey=${cronoscanApiKey}`;
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    if (data.status === "1" && data.result) {
+                        allTransfers = allTransfers.concat(data.result);
+                        if (data.result.length < pageSize) {
+                            hasMore = false;
+                        } else {
+                            startBlock = data.result[data.result.length - 1].blockNumber + 1;
+                        }
+                    } else {
+                        throw new Error(data.message || "No token transfers found.");
+                    }
+                } catch (error) {
+                    console.error(`Error fetching token transfers:`, error);
+                    break;
+                }
+            }
+            return allTransfers;
+        }
+
+        // Display transactions in the UI
+        async function displayTransactions() {
+            try {
+                // Fetch all contract transactions
+                const [contractNormalTxs, contractInternalTxs] = await Promise.all([
+                    fetchTransactions(contractAddress, "txlist"),
+                    fetchTransactions(contractAddress, "txlistinternal"),
+                ]);
+                const contractTxs = [...contractNormalTxs, ...contractInternalTxs];
+                const contractDiv = document.getElementById("contractTxs");
+                contractDiv.classList.remove("loading");
+                contractDiv.innerHTML = contractTxs.length
+                    ? contractTxs.map(tx => renderTransaction(tx)).join("")
+                    : "No transactions found for contract address.";
+
+                // Fetch all liquidity pool transactions
+                const [poolNormalTxs, poolInternalTxs] = await Promise.all([
+                    fetchTransactions(liquidityPoolAddress, "txlist"),
+                    fetchTransactions(liquidityPoolAddress, "txlistinternal"),
+                ]);
+                const poolTxs = [...poolNormalTxs, ...poolInternalTxs];
+                const liquidityPoolDiv = document.getElementById("liquidityPoolTxs");
+                liquidityPoolDiv.classList.remove("loading");
+                liquidityPoolDiv.innerHTML = poolTxs.length
+                    ? poolTxs.map(tx => renderTransaction(tx)).join("")
+                    : "No transactions found for liquidity pool address.";
+
+                // Fetch all token transfers for liquidity pool
+                const tokenTransfers = await fetchTokenTransfers(liquidityPoolAddress);
+                const liquidityPoolTokenTransfersDiv = document.getElementById("liquidityPoolTokenTransfers");
+                liquidityPoolTokenTransfersDiv.classList.remove("loading");
+                liquidityPoolTokenTransfersDiv.innerHTML = tokenTransfers.length
+                    ? tokenTransfers.map(tx => renderTokenTransfer(tx)).join("")
+                    : "No token transfers found for liquidity pool address.";
+            } catch (error) {
+                document.getElementById("contractTxs").innerHTML = `<span class="error">Error: ${error.message}</span>`;
+                document.getElementById("liquidityPoolTxs").innerHTML = `<span class="error">Error: ${error.message}</span>`;
+                document.getElementById("liquidityPoolTokenTransfers").innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        // Render a single transaction
+        function renderTransaction(tx) {
+            return `<div class="transaction">
+                <p>Hash: <a href="https://cronoscan.com/tx/${tx.hash}" target="_blank" class="hash">${tx.hash}</a></p>
+                <p>From: ${tx.from}</p>
+                <p>To: ${tx.to}</p>
+                <p>Value: ${ethers.utils.formatEther(tx.value || "0")} CRO</p>
+                <p>Gas Used: ${tx.gasUsed || "N/A"}</p>
+            </div>`;
+        }
+
+        // Render a single token transfer
+        function renderTokenTransfer(tx) {
+            return `<div class="transaction">
+                <p>Hash: <a href="https://cronoscan.com/tx/${tx.hash}" target="_blank" class="hash">${tx.hash}</a></p>
+                <p>From: ${tx.from}</p>
+                <p>To: ${tx.to}</p>
+                <p>Token: ${tx.tokenName} (${tx.tokenSymbol})</p>
+                <p>Value: ${ethers.utils.formatUnits(tx.value, tx.tokenDecimal)} ${tx.tokenSymbol}</p>
+            </div>`;
+        }
+
+        // Load the transactions on page load
+        window.onload = displayTransactions;
+    </script>
+</body>
+</html>
